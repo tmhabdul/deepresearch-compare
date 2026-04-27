@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPT Researcher — Report Comparison</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-hover: #1c2129;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-dim: #1f6feb22;
+    --green: #3fb950;
+    --yellow: #d29922;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header h1 {
+    font-size: 16px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  header h1 span { color: var(--accent); }
+  .topic-select {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    min-width: 280px;
+    cursor: pointer;
+  }
+  .topic-select:focus { border-color: var(--accent); outline: none; }
+  .topic-select option { background: var(--bg); }
+  .header-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+  }
+  .header-btn {
+    background: var(--bg);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .header-btn:hover { border-color: var(--accent); color: var(--text); }
+  .header-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  .header-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  /* ── Comparison grid ── */
+  .compare-container {
+    display: flex;
+    overflow-x: auto;
+    height: calc(100vh - 53px);
+    scroll-snap-type: x proximity;
+  }
+  .compare-container::-webkit-scrollbar { height: 8px; }
+  .compare-container::-webkit-scrollbar-track { background: var(--surface); }
+  .compare-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .compare-container::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+  .report-column {
+    flex: 0 0 auto;
+    width: max(460px, calc(100vw / var(--col-count, 2)));
+    max-width: 50vw;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    scroll-snap-align: start;
+  }
+  .report-column:last-child { border-right: none; }
+
+  /* ── Column header ── */
+  .col-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .col-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+  }
+  .model-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .meta-pills {
+    display: flex;
+    gap: 8px;
+    font-size: 11px;
+  }
+  .pill {
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+  }
+  .pill.cost { color: var(--green); border-color: #3fb95044; }
+  .pill.duration { color: var(--accent); border-color: #58a6ff44; }
+  .pill.sources { color: var(--text-muted); }
+
+  /* ── Collapsible settings ── */
+  .settings-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease-out;
+  }
+  .settings-panel.open {
+    max-height: 500px;
+    transition: max-height 0.3s ease-in;
+  }
+  .settings-inner {
+    padding: 0 16px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .settings-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  .settings-table td {
+    padding: 3px 0;
+    vertical-align: top;
+  }
+  .settings-table td:first-child {
+    color: var(--text-muted);
+    width: 160px;
+    padding-right: 12px;
+    white-space: nowrap;
+  }
+  .settings-table td:last-child {
+    color: var(--text);
+    font-weight: 500;
+    word-break: break-word;
+  }
+  .settings-table td:last-child.diff {
+    color: var(--yellow);
+    font-weight: 700;
+  }
+  .settings-toggle {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.15s;
+  }
+  .settings-toggle:hover { color: var(--text); }
+
+  /* ── Report body ── */
+  .report-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px 40px;
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  .report-body h1 { font-size: 22px; margin: 24px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  .report-body h2 { font-size: 18px; margin: 20px 0 10px; }
+  .report-body h3 { font-size: 15px; margin: 16px 0 8px; }
+  .report-body p { margin: 8px 0; }
+  .report-body a { color: var(--accent); text-decoration: none; }
+  .report-body a:hover { text-decoration: underline; }
+  .report-body ul, .report-body ol { margin: 8px 0 8px 24px; }
+  .report-body li { margin: 4px 0; }
+  .report-body blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 4px 16px;
+    margin: 8px 0;
+    color: var(--text-muted);
+    background: var(--accent-dim);
+    border-radius: 0 6px 6px 0;
+  }
+  .report-body code {
+    background: var(--surface);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .report-body pre {
+    background: var(--surface);
+    padding: 12px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 8px 0;
+    border: 1px solid var(--border);
+  }
+  .report-body pre code { background: none; padding: 0; }
+  .report-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  .report-body th, .report-body td {
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    text-align: left;
+  }
+  .report-body th { background: var(--surface); font-weight: 600; }
+  .report-body hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+  .report-body img { max-width: 100%; border-radius: 6px; margin: 8px 0; }
+
+  /* ── Empty state ── */
+  .empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: calc(100vh - 53px);
+    color: var(--text-muted);
+    font-size: 15px;
+    text-align: center;
+    padding: 24px;
+  }
+  .empty-state p { margin: 6px 0; }
+  .empty-state code {
+    background: var(--surface);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+
+  /* scrollbar */
+  .report-body::-webkit-scrollbar { width: 6px; }
+  .report-body::-webkit-scrollbar-track { background: transparent; }
+  .report-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .report-body::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>GPT Researcher</span> — Compare</h1>
+  <select class="topic-select" id="topicSelect">
+    <option value="">Select a topic...</option>
+  </select>
+  <div class="header-controls">
+    <button class="header-btn" id="toggleAllSettings">Show Settings</button>
+    <button class="header-btn" id="syncScrollBtn">Sync Scroll: ON</button>
+    <div class="header-meta" id="headerMeta"></div>
+  </div>
+</header>
+
+<div id="content">
+  <div class="empty-state">
+    <div>
+      <p>No topic selected.</p>
+      <p>Generate the manifest: <code>python generate_manifest.py</code></p>
+      <p>Then serve: <code>python -m http.server 8080</code></p>
+    </div>
+  </div>
+</div>
+
+<script>
+(async function() {
+  let manifest = {};
+  try {
+    const resp = await fetch('reports.json');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    manifest = await resp.json();
+  } catch (e) {
+    document.getElementById('content').innerHTML = `
+      <div class="empty-state"><div>
+        <p>Could not load <code>reports.json</code></p>
+        <p>Run: <code>python generate_manifest.py</code></p>
+        <p style="margin-top:8px;font-size:12px">${e.message}</p>
+      </div></div>`;
+    return;
+  }
+
+  const topicSelect = document.getElementById('topicSelect');
+  const contentEl = document.getElementById('content');
+  const headerMeta = document.getElementById('headerMeta');
+  const toggleAllBtn = document.getElementById('toggleAllSettings');
+  const syncBtn = document.getElementById('syncScrollBtn');
+
+  let settingsVisible = false;
+  let syncEnabled = true;
+
+  // Populate topic dropdown
+  const topics = Object.keys(manifest).sort();
+  for (const topic of topics) {
+    const opt = document.createElement('option');
+    opt.value = topic;
+    const count = manifest[topic].length;
+    opt.textContent = `${topic.replace(/_/g, ' ')} (${count})`;
+    topicSelect.appendChild(opt);
+  }
+
+  function findDiffs(reports) {
+    if (reports.length < 2) return new Set();
+    const diffs = new Set();
+    const keys = Object.keys(reports[0].settings || {});
+    for (const key of keys) {
+      const vals = reports.map(r => JSON.stringify((r.settings || {})[key]));
+      if (new Set(vals).size > 1) diffs.add(key);
+    }
+    return diffs;
+  }
+
+  function formatKey(key) {
+    return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  function shortModel(llmStr) {
+    if (!llmStr) return '?';
+    const parts = llmStr.split(':');
+    return parts.length > 1 ? parts.slice(1).join(':') : llmStr;
+  }
+
+  function renderTopic(topic) {
+    const reports = manifest[topic];
+    if (!reports || !reports.length) return;
+
+    const diffs = findDiffs(reports);
+    headerMeta.textContent = `${reports.length} report${reports.length > 1 ? 's' : ''}`;
+
+    contentEl.innerHTML = '';
+    const container = document.createElement('div');
+    container.className = 'compare-container';
+    container.style.setProperty('--col-count', Math.min(reports.length, 2));
+
+    const scrollBodies = [];
+
+    for (const report of reports) {
+      const col = document.createElement('div');
+      col.className = 'report-column';
+      const s = report.settings || {};
+
+      // Settings table rows
+      const settingsRows = Object.keys(s).map(key => {
+        const isDiff = diffs.has(key);
+        let val = s[key];
+        if (key.endsWith('_llm')) val = shortModel(val);
+        return `<tr>
+          <td>${formatKey(key)}</td>
+          <td class="${isDiff ? 'diff' : ''}">${val}</td>
+        </tr>`;
+      }).join('');
+
+      col.innerHTML = `
+        <div class="col-header">
+          <div class="col-header-top">
+            <div>
+              <div class="model-name">${shortModel(s.smart_llm || '?')}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${s.tone || ''} · ${s.report_type || ''}</div>
+            </div>
+            <div class="meta-pills">
+              <span class="pill cost">$${(report.costs || 0).toFixed(4)}</span>
+              <span class="pill duration">${report.duration_seconds || '?'}s</span>
+              <span class="pill sources">${(report.sources || []).length} src</span>
+            </div>
+          </div>
+          <div class="settings-panel${settingsVisible ? ' open' : ''}">
+            <div class="settings-inner">
+              <table class="settings-table"><tbody>${settingsRows}</tbody></table>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const body = document.createElement('div');
+      body.className = 'report-body';
+      body.innerHTML = marked.parse(report.report || '*No report content*');
+      col.appendChild(body);
+
+      container.appendChild(col);
+      scrollBodies.push(body);
+    }
+
+    contentEl.appendChild(container);
+
+    // Sync scroll
+    let isSyncing = false;
+    for (const body of scrollBodies) {
+      body.addEventListener('scroll', function() {
+        if (!syncEnabled || isSyncing) return;
+        isSyncing = true;
+        const pct = this.scrollTop / (this.scrollHeight - this.clientHeight || 1);
+        for (const other of scrollBodies) {
+          if (other !== this) {
+            other.scrollTop = pct * (other.scrollHeight - other.clientHeight);
+          }
+        }
+        requestAnimationFrame(() => { isSyncing = false; });
+      });
+    }
+  }
+
+  // Toggle all settings panels
+  toggleAllBtn.addEventListener('click', () => {
+    settingsVisible = !settingsVisible;
+    toggleAllBtn.textContent = settingsVisible ? 'Hide Settings' : 'Show Settings';
+    toggleAllBtn.classList.toggle('active', settingsVisible);
+    document.querySelectorAll('.settings-panel').forEach(el => {
+      el.classList.toggle('open', settingsVisible);
+    });
+  });
+
+  // Toggle sync scroll
+  syncBtn.addEventListener('click', () => {
+    syncEnabled = !syncEnabled;
+    syncBtn.textContent = `Sync Scroll: ${syncEnabled ? 'ON' : 'OFF'}`;
+    syncBtn.classList.toggle('active', syncEnabled);
+  });
+
+  topicSelect.addEventListener('change', () => {
+    const topic = topicSelect.value;
+    if (topic) {
+      renderTopic(topic);
+      history.replaceState(null, '', `#${topic}`);
+    }
+  });
+
+  // Load from hash or auto-select if only one topic
+  const hash = location.hash.slice(1);
+  if (hash && manifest[hash]) {
+    topicSelect.value = hash;
+    renderTopic(hash);
+  } else if (topics.length === 1) {
+    topicSelect.value = topics[0];
+    renderTopic(topics[0]);
+  }
+})();
+</script>
+</body>
+</html>
